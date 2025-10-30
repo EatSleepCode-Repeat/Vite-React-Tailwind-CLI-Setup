@@ -1,0 +1,350 @@
+vite-setup() {
+    # Colors for better UI
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    MAGENTA='\033[0;35m'
+    CYAN='\033[0;36m'
+    NC='\033[0m' # No Color
+    BOLD='\033[1m'
+
+    # Function to print colored messages
+    print_header() {
+        echo -e "\n${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${CYAN}${BOLD}  $1${NC}"
+        echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+    }
+
+    print_success() {
+        echo -e "${GREEN}✓${NC} $1"
+    }
+
+    print_error() {
+        echo -e "${RED}✗${NC} $1"
+    }
+
+    print_info() {
+        echo -e "${BLUE}ℹ${NC} $1"
+    }
+
+    print_warning() {
+        echo -e "${YELLOW}⚠${NC} $1"
+    }
+
+    # Function to display menu
+    show_menu() {
+        clear
+        echo -e "${MAGENTA}${BOLD}"
+        cat << "EOF"
+╔═══════════════════════════════════════════╗
+║   Vite + React + Tailwind CSS Setup      ║
+║              Menu System                  ║
+╚═══════════════════════════════════════════╝
+EOF
+        echo -e "${NC}"
+
+        echo -e "${CYAN}1.${NC} Create new project"
+        echo -e "${CYAN}2.${NC} Setup existing project"
+        echo -e "${CYAN}3.${NC} View configuration details"
+        echo -e "${CYAN}4.${NC} Install additional dependencies"
+        echo -e "${CYAN}5.${NC} Exit"
+        echo -e "\n${YELLOW}Enter your choice [1-5]:${NC} "
+    }
+
+    # Function to check if command exists
+    command_exists() {
+        command -v "$1" >/dev/null 2>&1
+    }
+
+    # Function to check prerequisites
+    check_prerequisites() {
+        print_header "Checking Prerequisites"
+
+        local all_good=true
+
+        if command_exists node; then
+            print_success "Node.js installed ($(node --version))"
+        else
+            print_error "Node.js is not installed"
+            all_good=false
+        fi
+
+        if command_exists npm; then
+            print_success "npm installed ($(npm --version))"
+        else
+            print_error "npm is not installed"
+            all_good=false
+        fi
+
+        if ! $all_good; then
+            print_error "Please install missing prerequisites before continuing"
+            return 1
+        fi
+
+        return 0
+    }
+
+    # Function to create new project
+    create_project() {
+        print_header "Create New Project"
+
+        echo -e "${YELLOW}Enter project name:${NC} "
+        read project_name
+
+        if [[ -z "$project_name" ]]; then
+            print_error "Project name cannot be empty"
+            sleep 2
+            return
+        fi
+
+        if [[ -d "$project_name" ]]; then
+            print_error "Directory '$project_name' already exists"
+            sleep 2
+            return
+        fi
+
+        print_info "Creating Vite + React project..."
+        # Use --yes flag to skip prompts and auto-install
+        echo "y" | npm create vite@latest "$project_name" -- --template react
+
+        if [[ $? -ne 0 ]]; then
+            print_error "Failed to create project"
+            sleep 2
+            return
+        fi
+
+        # Save the original directory
+        local original_dir=$(pwd)
+        
+        cd "$project_name" || {
+            print_error "Failed to enter project directory"
+            return
+        }
+
+        print_info "Installing dependencies..."
+        npm install
+
+        if [[ $? -ne 0 ]]; then
+            print_error "Failed to install dependencies"
+            cd "$original_dir"
+            return
+        fi
+
+        print_info "Installing Tailwind CSS..."
+        npm install -D tailwindcss postcss autoprefixer
+
+        if [[ $? -ne 0 ]]; then
+            print_error "Failed to install Tailwind CSS"
+            cd "$original_dir"
+            return
+        fi
+
+        print_info "Initializing Tailwind configuration..."
+        npx tailwindcss init -p
+
+        if [[ $? -ne 0 ]]; then
+            print_error "Failed to initialize Tailwind"
+            cd "$original_dir"
+            return
+        fi
+
+        # Configure Tailwind (now we're in the project directory)
+        setup_tailwind_config
+
+        print_success "Project created successfully!"
+        print_info "Project location: $(pwd)"
+        
+        print_info "To start development:"
+        echo -e "  ${GREEN}cd $project_name${NC}"
+        echo -e "  ${GREEN}npm run dev${NC}"
+
+        # Return to original directory
+        cd "$original_dir"
+
+        echo -e "\n${YELLOW}Press Enter to continue...${NC}"
+        read
+    }
+
+    # Function to setup Tailwind in existing project
+    setup_existing_project() {
+        print_header "Setup Existing Project"
+
+        if [[ ! -f "package.json" ]]; then
+            print_error "No package.json found. Are you in a project directory?"
+            sleep 2
+            return
+        fi
+
+        print_info "Installing Tailwind CSS..."
+        npm install -D tailwindcss postcss autoprefixer
+        npx tailwindcss init -p
+
+        setup_tailwind_config
+
+        print_success "Tailwind CSS setup complete!"
+
+        echo -e "\n${YELLOW}Press Enter to continue...${NC}"
+        read
+    }
+
+    # Function to configure Tailwind
+    setup_tailwind_config() {
+        print_info "Configuring Tailwind CSS…"
+
+        # Update tailwind.config.js
+        cat > tailwind.config.js << 'EOF'
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}
+EOF
+
+        # Update or create index.css
+        cat > src/index.css << 'EOF'
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+EOF
+
+        # Update main.jsx to import the CSS (if not already imported)
+        if [[ -f "src/main.jsx" ]]; then
+            if ! grep -q "index.css" src/main.jsx; then
+                # Add import at the top after React imports
+                sed -i "1i import './index.css'" src/main.jsx
+                print_success "Added index.css import to main.jsx"
+            fi
+        fi
+
+        # Create a simple App.jsx with Tailwind example
+        cat > src/App.jsx << 'EOF'
+function App() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+      <div className="bg-white rounded-lg shadow-2xl p-8 max-w-md">
+        <h1 className="text-4xl font-bold text-gray-800 mb-4">
+          Vite + React + Tailwind
+        </h1>
+        <p className="text-gray-600 mb-6">
+          Your project is ready! Edit <code className="bg-gray-100 px-2 py-1 rounded">src/App.jsx</code> to get started.
+        </p>
+        <button className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-300">
+          Get Started
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export default App
+EOF
+
+        print_success "Tailwind configuration complete with example component"
+    }
+
+    # Function to show configuration
+    show_config() {
+        print_header "Configuration Details"
+
+        echo -e "${CYAN}${BOLD}Tech Stack:${NC}"
+        echo -e "  • Vite - Build tool and dev server"
+        echo -e "  • React - UI library"
+        echo -e "  • Tailwind CSS - Utility-first CSS framework"
+
+        echo -e "\n${CYAN}${BOLD}Default Scripts:${NC}"
+        echo -e "  ${GREEN}npm run dev${NC}     - Start development server"
+        echo -e "  ${GREEN}npm run build${NC}   - Build for production"
+        echo -e "  ${GREEN}npm run preview${NC} - Preview production build"
+
+        echo -e "\n${CYAN}${BOLD}File Structure:${NC}"
+        echo -e "  project-name/"
+        echo -e "  ├── src/"
+        echo -e "  │   ├── App.jsx"
+        echo -e "  │   ├── index.css"
+        echo -e "  │   └── main.jsx"
+        echo -e "  ├── tailwind.config.js"
+        echo -e "  ├── postcss.config.js"
+        echo -e "  └── vite.config.js"
+
+        echo -e "\n${YELLOW}Press Enter to continue...${NC}"
+        read
+    }
+
+    # Function to install additional dependencies
+    install_additional() {
+        print_header "Install Additional Dependencies"
+
+        echo -e "${CYAN}Select packages to install:${NC}\n"
+        echo -e "1. React Router DOM (routing)"
+        echo -e "2. Axios (HTTP client)"
+        echo -e "3. React Icons"
+        echo -e "4. Framer Motion (animations)"
+        echo -e "5. Zustand (state management)"
+        echo -e "6. All of the above"
+        echo -e "7. Custom package"
+        echo -e "8. Back to main menu"
+
+        echo -e "\n${YELLOW}Enter your choice [1-8]:${NC} "
+        read choice
+
+        case $choice in
+            1) npm install react-router-dom ;;
+            2) npm install axios ;;
+            3) npm install react-icons ;;
+            4) npm install framer-motion ;;
+            5) npm install zustand ;;
+            6) npm install react-router-dom axios react-icons framer-motion zustand ;;
+            7)
+                echo -e "\n${YELLOW}Enter package name:${NC} "
+                read package_name
+                npm install "$package_name"
+                ;;
+            8) return ;;
+            *) print_error "Invalid choice" ;;
+        esac
+
+        if [[ $? -eq 0 && $choice != 8 ]]; then
+            print_success "Packages installed successfully!"
+        fi
+
+        echo -e "\n${YELLOW}Press Enter to continue...${NC}"
+        read
+    }
+
+    # Main loop
+    main() {
+        if ! check_prerequisites; then
+            return 1
+        fi
+       
+        while true; do
+            show_menu
+            read choice
+           
+            case $choice in
+                1) create_project ;;
+                2) setup_existing_project ;;
+                3) show_config ;;
+                4) install_additional ;;
+                5)
+                    print_info "Goodbye!"
+                    return 0
+                    ;;
+                *)
+                    print_error "Invalid choice. Please select 1-5"
+                    sleep 1
+                    ;;
+            esac
+        done
+    }
+
+    # Run the main function
+    main
+}
